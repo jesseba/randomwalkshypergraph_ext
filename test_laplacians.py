@@ -11,6 +11,8 @@ import json
 from datetime import datetime
 from typing import Dict, List
 import matplotlib.pyplot as plt
+from tqdm import tqdm
+import time
 
 
 def setup_output_directories():
@@ -98,24 +100,40 @@ def plot_results(results: Dict, plots_dir: str):
 
 def compare_laplacians(beta_values: List[float] = [0.3, 0.5, 0.7]):
     """Compare different Laplacian constructions"""
+    # Load data
+    print("Loading data...")
     universe, matches = load_halo_data()
     
     results = {}
+    
+    # Test basic constructions
     laplacians = {
         'random_walk': RandomWalkLaplacian(universe, matches),
         'zhou': ZhouLaplacian(universe, matches)
     }
     
+    # Test Chan's construction with different beta values
     for beta in beta_values:
         laplacians[f'chan_beta_{beta}'] = ChanLaplacian(universe, matches, beta)
     
-    for name, lap in laplacians.items():
-        print(f"Evaluating {name}...")
+    # Evaluate each construction
+    for name, lap in tqdm(laplacians.items(), desc="Evaluating Laplacians"):
+        start_time = time.time()
+        print(f"\nEvaluating {name}...")
+        
+        # Compute Laplacian
         L = lap.compute_laplacian()
+        
+        # Get probability transition matrix and rankings
         P = lap.compute_transition_matrix(L)
         rankings = lap.compute_pagerank(P, r=0.4)
-        results[name] = evaluate_head_to_head(rankings, universe)
         
+        # Evaluate on head-to-head matches
+        results[name] = evaluate_head_to_head(rankings, universe)
+        results[name]['runtime'] = time.time() - start_time
+        
+        print(f"Completed {name} in {results[name]['runtime']:.2f} seconds")
+    
     return results
 
 if __name__ == '__main__':

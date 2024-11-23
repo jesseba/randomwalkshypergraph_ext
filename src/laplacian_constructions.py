@@ -51,25 +51,34 @@ class HypergraphLaplacian:
         return np.eye(self.n) - L
         
     def compute_pagerank(self, P: np.ndarray, r: float = 0.4, 
-                        eps: float = 1e-8) -> np.ndarray:
+                    eps: float = 1e-8, max_iter: int = 1000) -> np.ndarray:
         """
-        Compute PageRank scores
-        Args:
-            P: Transition matrix
-            r: Restart probability
-            eps: Convergence threshold
+        Compute PageRank scores with better numerical stability
         """
-        x = np.ones(self.n) / self.n
-        converged = False
-        t = 0
+        n = P.shape[0]
+        x = np.ones(n) / n
         
-        while not converged:
-            x_new = (1-r)*P.dot(x) + (r/self.n)*np.ones(self.n)
-            if (np.linalg.norm(x_new - x, ord=1) < eps and t > 100):
-                converged = True
-            t += 1
+        # Convert P to sparse if it isn't already
+        if not sparse.issparse(P):
+            P = sparse.csr_matrix(P)
+        
+        for t in range(max_iter):
+            x_new = (1-r) * P.dot(x) + (r/n) * np.ones(n)
+            
+            # Normalize to prevent overflow
+            x_new = x_new / np.sum(x_new)
+            
+            # Check convergence
+            if np.linalg.norm(x_new - x, ord=1) < eps:
+                return x_new
+                
             x = x_new
             
+            # Print progress every 100 iterations
+            if t % 100 == 0:
+                print(f"PageRank iteration {t}, error: {np.linalg.norm(x_new - x, ord=1)}")
+        
+        print("Warning: PageRank did not converge")
         return x
 
 class RandomWalkLaplacian(HypergraphLaplacian):
@@ -112,44 +121,45 @@ class ChanLaplacian(HypergraphLaplacian):
     
     def __init__(self, universe: np.ndarray, pi_list: List[Tuple], 
                  beta: float = 0.5):
-        """
-        Args:
-            beta: Mediator weight parameter (0 to 1)
-                 Higher values = more direct flow vs mediated flow
-        """
         super().__init__(universe, pi_list)
         self.beta = beta
         
     def compute_laplacian(self) -> np.ndarray:
-        # Add debug prints
+        """Compute Laplacian using sparse matrices for better efficiency"""
         print(f"W shape: {self.W.shape}")
         print(f"R shape: {self.R.shape}")
         print(f"Number of vertices (n): {self.n}")
         print(f"Number of edges (m): {self.m}")
         
+        # Convert to sparse matrices
+        W_sparse = sparse.csr_matrix(self.W)
+        R_sparse = sparse.csr_matrix(self.R)
+        
         # Compute vertex degrees
-        d_v = np.sum(self.W, axis=1)
-        D_v = np.diag(d_v)
-        D_v_sqrt = np.diag(np.sqrt(d_v))
-        D_v_sqrt_inv = np.diag(1.0 / np.sqrt(d_v))
+        d_v = np.array(W_sparse.sum(axis=1)).flatten()
         
-        # Compute edge degrees
-        d_e = np.sum(self.R, axis=1)
-        D_e = np.diag(d_e)
+        # Avoid division by zero
+        d_v[d_v == 0] = 1
         
-        try:
-            # Compute normalized adjacency matrix
-            H = self.W.dot(self.R)  # Non-normalized adjacency
-            print(f"Successfully computed H with shape: {H.shape}")
-        except ValueError as e:
-            print(f"Error computing H: {str(e)}")
-            raise
+        # Compute normalized matrices using sparse operations
+        D_v_sqrt_inv = sparse.diags(1.0 / np.sqrt(d_v))
+        
+        # Compute H more efficiently
+        H = W_sparse.dot(R_sparse.T)
+        print(f"Successfully computed H with shape: {H.shape}")
+        
+        # Normalize H
+        Theta = D_v_sqrt_inv.dot(H).dot(D_v_sqrt_inv)
+        
+        # Convert to array for final computations
+        Theta = Theta.toarray()
         
         # Direct flow component
-        direct_flow = self.beta * H
+        direct_flow = self.beta * Theta
         
-        # Mediated flow component 
-        mediated_flow = (1 - self.beta) * (H.dot(H))
+        # Mediated flow component - use sparse matrix multiplication
+        Theta_sparse = sparse.csr_matrix(Theta)
+        mediated_flow = (1 - self.beta) * (Theta_sparse.dot(Theta_sparse)).toarray()
         
         # Combined normalized matrix
         A_norm = direct_flow + mediated_flow
