@@ -1,6 +1,15 @@
 import numpy as np
 from scipy import sparse
 from typing import Tuple, List
+import psutil
+import os
+from tqdm import tqdm
+import time
+
+def print_memory_usage():
+    """Print current memory usage"""
+    process = psutil.Process(os.getpid())
+    print(f"Memory usage: {process.memory_info().rss / 1024 / 1024:.2f} MB")
 
 class HypergraphLaplacian:
     """Base class for different hypergraph Laplacian constructions"""
@@ -117,105 +126,57 @@ class ZhouLaplacian(HypergraphLaplacian):
         return np.eye(self.n) - temp
 
 class ChanLaplacian(HypergraphLaplacian):
-    """Implementation of Chan et al. 2018 Laplacian with mediators"""
-    
-    def __init__(self, universe: np.ndarray, pi_list: List[Tuple], 
-                 beta: float = 0.5):
+    def __init__(self, universe: np.ndarray, pi_list: List[Tuple], beta: float = 0.5):
         super().__init__(universe, pi_list)
         self.beta = beta
         
     def compute_laplacian(self) -> np.ndarray:
         """Compute Laplacian using sparse matrices for better efficiency"""
+        # Print initial dimensions and memory usage
+        print_memory_usage()
+        print(f"\nInitial matrices:")
         print(f"W shape: {self.W.shape}")
         print(f"R shape: {self.R.shape}")
         print(f"Number of vertices (n): {self.n}")
         print(f"Number of edges (m): {self.m}")
         
         # Convert to sparse matrices
-        W_sparse = sparse.csr_matrix(self.W)
-        R_sparse = sparse.csr_matrix(self.R)
+        W_sparse = sparse.csr_matrix(self.W)  # |V| x |E|
+        R_sparse = sparse.csr_matrix(self.R)  # |E| x |V|
+        print("\nAfter converting to sparse:")
+        print_memory_usage()
         
         # Compute vertex degrees
         d_v = np.array(W_sparse.sum(axis=1)).flatten()
-        
-        # Avoid division by zero
         d_v[d_v == 0] = 1
         
-        # Compute normalized matrices using sparse operations
+        # Use sparse diagonal matrix
         D_v_sqrt_inv = sparse.diags(1.0 / np.sqrt(d_v))
         
         # Compute H more efficiently
-        H = W_sparse.dot(R_sparse.T)
-        print(f"Successfully computed H with shape: {H.shape}")
+        print("\nComputing H...")
+        H = W_sparse.dot(R_sparse)
+        print("H computed with shape:", H.shape)
+        print_memory_usage()
         
         # Normalize H
+        print("\nComputing Theta...")
         Theta = D_v_sqrt_inv.dot(H).dot(D_v_sqrt_inv)
+        print("Theta shape:", Theta.shape)
+        print_memory_usage()
         
-        # Convert to array for final computations
-        Theta = Theta.toarray()
-        
-        # Direct flow component
+        # Handle direct and mediated flow using sparse operations
+        print("\nComputing flows...")
         direct_flow = self.beta * Theta
+        mediated_flow = (1 - self.beta) * (Theta.dot(Theta))
         
-        # Mediated flow component - use sparse matrix multiplication
-        Theta_sparse = sparse.csr_matrix(Theta)
-        mediated_flow = (1 - self.beta) * (Theta_sparse.dot(Theta_sparse)).toarray()
-        
-        # Combined normalized matrix
+        # Final computations
+        print("\nComputing final matrix...")
         A_norm = direct_flow + mediated_flow
         
-        # Return normalized Laplacian
-        return np.eye(self.n) - A_norm
-
-def create_synthetic_hypergraph(n_vertices: int, 
-                              n_edges: int,
-                              k_clusters: int) -> Tuple[np.ndarray, List[Tuple]]:
-    """
-    Create synthetic hypergraph with known clustering structure
-    
-    Args:
-        n_vertices: Number of vertices
-        n_edges: Number of hyperedges
-        k_clusters: Number of ground truth clusters
+        # Convert to array at the last possible moment
+        result = sparse.eye(self.n) - A_norm
+        print("\nFinal memory usage:")
+        print_memory_usage()
         
-    Returns:
-        universe: Vertex array
-        pi_list: List of (players, scores) tuples
-    """
-    universe = np.arange(n_vertices)
-    pi_list = []
-    
-    # Assign vertices to clusters
-    cluster_size = n_vertices // k_clusters
-    clusters = np.repeat(range(k_clusters), cluster_size)
-    
-    # Generate hyperedges biased towards clusters
-    for _ in range(n_edges):
-        # Pick main cluster
-        main_cluster = np.random.randint(k_clusters)
-        cluster_vertices = universe[clusters == main_cluster]
-        
-        # Add some noise vertices
-        other_vertices = universe[clusters != main_cluster]
-        noise_vertices = np.random.choice(
-            other_vertices,
-            size=np.random.randint(1, 4),
-            replace=False
-        )
-        
-        # Combine vertices
-        edge_vertices = np.concatenate([
-            np.random.choice(
-                cluster_vertices,
-                size=np.random.randint(3, 7),
-                replace=False
-            ),
-            noise_vertices
-        ])
-        
-        # Generate random scores
-        scores = np.random.rand(len(edge_vertices))
-        
-        pi_list.append((edge_vertices, scores))
-        
-    return universe, pi_list
+        return result.toarray()

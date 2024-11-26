@@ -1,0 +1,23 @@
+Laplacian Comparison Results
+===========================
+
+random_walk:
+  Accuracy: 0.711
+  Total Matches: 5093
+
+zhou:
+  Accuracy: 0.528
+  Total Matches: 5093
+
+chan_beta_0.3:
+  Accuracy: 0.554
+  Total Matches: 5093
+
+chan_beta_0.5:
+  Accuracy: 0.554
+  Total Matches: 5093
+
+chan_beta_0.7:
+  Accuracy: 0.551
+  Total Matches: 5093
+

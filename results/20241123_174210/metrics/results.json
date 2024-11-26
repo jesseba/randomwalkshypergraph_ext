@@ -1,0 +1,22 @@
+{
+    "random_walk": {
+        "accuracy": 0.7113685450618495,
+        "total_matches": 5093
+    },
+    "zhou": {
+        "accuracy": 0.527979579815433,
+        "total_matches": 5093
+    },
+    "chan_beta_0.3": {
+        "accuracy": 0.554093854309837,
+        "total_matches": 5093
+    },
+    "chan_beta_0.5": {
+        "accuracy": 0.5537011584527783,
+        "total_matches": 5093
+    },
+    "chan_beta_0.7": {
+        "accuracy": 0.550755939524838,
+        "total_matches": 5093
+    }
+}

@@ -4,7 +4,8 @@ from src.visualization import plot_results
 from src.laplacian_constructions import (
     RandomWalkLaplacian, 
     ZhouLaplacian,
-    ChanLaplacian
+    ChanLaplacian,
+    print_memory_usage
 )
 import os
 import json
