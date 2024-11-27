@@ -144,7 +144,6 @@ def main():
     with open(output_file, 'w') as f:
         for rank in rankings_hg:
             f.write(f"{rank}\n")
-
     print(f"Raw rankings have been saved to {output_file}")
 
 if __name__ == '__main__':
