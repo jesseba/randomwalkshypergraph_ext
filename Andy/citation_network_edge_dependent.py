@@ -4,6 +4,9 @@ import zipfile
 import io
 from scipy import sparse
 
+# the dataset is too big to upload to git.
+# here is the address : https://lfs.aminer.cn/lab-datasets/citation/dblp.v10.ziphttps://lfs.aminer.cn/lab-datasets/citation/dblp.v10.zip
+
 def compute_pr(P, r, n, eps=1e-8):
     x = np.ones(n) / n * 1.0
     flag = True
